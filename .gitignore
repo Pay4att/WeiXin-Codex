@@ -1,0 +1,18 @@
+node_modules/
+.DS_Store
+*.log
+*.pid
+.env
+.env.*
+
+# Local runtime state contains Weixin/Codex credentials and chat data.
+.weixin-codex/
+credentials.json
+auth.json
+sessions.json
+delivery.json
+get-updates-cursor.txt
+chat/
+codex-home/
+runtime-home/
+runtime-tmp/

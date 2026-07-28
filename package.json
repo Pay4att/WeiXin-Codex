@@ -1,0 +1,22 @@
+{
+  "name": "weixin-codex",
+  "version": "0.1.0",
+  "description": "Standalone Weixin to Codex app-server bridge",
+  "type": "module",
+  "license": "MIT",
+  "private": true,
+  "bin": {
+    "weixin-codex": "./scripts/weixin-codex.mjs"
+  },
+  "scripts": {
+    "test": "node --test",
+    "check": "node --check scripts/weixin-codex.mjs && node --check scripts/bridge.mjs",
+    "smoke:codex": "node scripts/codex-live-smoke.mjs"
+  },
+  "dependencies": {
+    "qrcode-terminal": "0.12.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

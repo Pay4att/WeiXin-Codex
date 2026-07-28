@@ -1,0 +1,36 @@
+{
+  "name": "weixin-codex",
+  "version": "0.1.0",
+  "description": "Connect Weixin directly to the local Codex app-server without OpenClaw.",
+  "author": {
+    "name": "pay4att"
+  },
+  "license": "MIT",
+  "keywords": [
+    "weixin",
+    "wechat",
+    "codex",
+    "chat"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "\u5fae\u4fe1\u76f4\u8fde Codex",
+    "shortDescription": "\u4e0d\u7ecf OpenClaw\uff0c\u5728\u5fae\u4fe1\u4e2d\u76f4\u63a5\u548c Codex \u804a\u5929\u3002",
+    "longDescription": "\u590d\u7528\u817e\u8baf\u5fae\u4fe1 iLink \u63a5\u53e3\u5b8c\u6210\u626b\u7801\u3001\u6587\u5b57\u4e0e\u56fe\u7247\u6536\u53d1\uff0c\u5e76\u76f4\u63a5\u8fde\u63a5\u672c\u673a Codex app-server\u3002\u652f\u6301\u56fe\u7247\u8bc6\u522b\u3001\u56fe\u7247\u751f\u6210\u4e0e\u5fae\u4fe1 CDN \u52a0\u5bc6\u56de\u4f20\uff1b\u4f7f\u7528\u7cfb\u7edf\u7ea7\u9694\u79bb\u7684\u7eaf\u804a\u5929\u6c99\u7bb1\uff0c\u9ed8\u8ba4 GPT-5.6 Luna + max\u3002",
+    "developerName": "pay4att",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Local",
+      "Vision",
+      "Image Generation",
+      "Sandboxed"
+    ],
+    "defaultPrompt": [
+      "\u5e2e\u6211\u5b89\u88c5\u5e76\u626b\u7801\u8fde\u63a5\u5fae\u4fe1\u76f4\u8fde Codex\u3002",
+      "\u67e5\u770b\u5fae\u4fe1\u76f4\u8fde Codex \u7684\u8fd0\u884c\u72b6\u6001\u3002",
+      "\u628a\u5fae\u4fe1\u804a\u5929\u6a21\u578b\u6539\u6210 GPT-5.6 Sol\u3002"
+    ],
+    "brandColor": "#07C160"
+  }
+}
