@@ -7,7 +7,11 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
 
-import { writeMacSandboxProfile } from "../scripts/lib/codex-client.mjs";
+import {
+  discoverGeneratedImages,
+  snapshotGeneratedImages,
+  writeMacSandboxProfile,
+} from "../scripts/lib/codex-client.mjs";
 import {
   IMAGE_GENERATION_ACK,
   isImageGenerationRequest,
@@ -146,6 +150,29 @@ test("typing indicator gets a ticket, starts, and cancels", async () => {
     );
   } finally {
     await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("new image files are recovered when Codex omits imageGeneration events", () => {
+  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "weixin-codex-generated-test-"));
+  const paths = { codexHome: path.join(temporary, "codex-home") };
+  const threadId = "thread-safe-id";
+  const generated = path.join(paths.codexHome, "generated_images", threadId);
+  fs.mkdirSync(generated, { recursive: true });
+  try {
+    const existing = path.join(generated, "existing.png");
+    fs.writeFileSync(existing, Buffer.from("existing"));
+    const before = snapshotGeneratedImages(paths, threadId);
+    const created = path.join(generated, "new-image.png");
+    fs.writeFileSync(created, Buffer.from("new"));
+    fs.writeFileSync(path.join(generated, "not-an-image.txt"), Buffer.from("ignored"));
+    assert.deepEqual(discoverGeneratedImages(paths, threadId, before), [created]);
+    assert.throws(
+      () => snapshotGeneratedImages(paths, "../outside"),
+      /thread ID 无效/,
+    );
+  } finally {
+    fs.rmSync(temporary, { recursive: true, force: true });
   }
 });
 

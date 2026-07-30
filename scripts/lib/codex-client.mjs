@@ -28,6 +28,32 @@ function sandboxString(value) {
   return String(value).replaceAll("\\", "\\\\").replaceAll('"', '\\"');
 }
 
+function generatedImageDirectory(paths, threadId) {
+  const safeThreadId = String(threadId || "");
+  if (!safeThreadId || path.basename(safeThreadId) !== safeThreadId) {
+    throw new Error("Codex thread ID 无效，已拒绝扫描生成图片");
+  }
+  return path.join(paths.codexHome, "generated_images", safeThreadId);
+}
+
+export function snapshotGeneratedImages(paths, threadId) {
+  const directory = generatedImageDirectory(paths, threadId);
+  if (!fs.existsSync(directory)) return new Set();
+  const supported = /\.(?:png|jpe?g|webp|gif)$/i;
+  return new Set(
+    fs
+      .readdirSync(directory, { withFileTypes: true })
+      .filter((entry) => entry.isFile() && supported.test(entry.name))
+      .map((entry) => path.join(directory, entry.name)),
+  );
+}
+
+export function discoverGeneratedImages(paths, threadId, before) {
+  return [...snapshotGeneratedImages(paths, threadId)].filter(
+    (filePath) => !before.has(filePath),
+  );
+}
+
 export function writeMacSandboxProfile(paths) {
   const realStateDir = fs.realpathSync(paths.stateDir);
   const profile = [
@@ -192,6 +218,7 @@ export class CodexAppServer {
     const paths = prepareIsolatedCodexHome();
     const settings = this.getUserSettings(userId);
     const threadId = await this.#ensureThread(userId, settings, paths.chatWorkspace);
+    const generatedBefore = snapshotGeneratedImages(paths, threadId);
     const response = await this.request("turn/start", {
       threadId,
       input: [
@@ -207,7 +234,26 @@ export class CodexAppServer {
       effort: settings.effort,
       summary: "none",
     });
-    return this.#waitForTurn(response.turn.id);
+    const result = await this.#waitForTurn(response.turn.id);
+    const fallbackPaths =
+      result.images.length === 0
+        ? discoverGeneratedImages(paths, threadId, generatedBefore)
+        : [];
+    const fallbackImages = fallbackPaths
+      .map((savedPath) =>
+        this.#materializeGeneratedImage({
+          status: "completed",
+          savedPath,
+        }),
+      )
+      .filter(Boolean);
+    if (fallbackImages.length) {
+      process.stderr.write(
+        `[codex] 已从隔离生成目录补获 ${fallbackImages.length} 张图片\n`,
+      );
+      result.images.push(...fallbackImages);
+    }
+    return result;
   }
 
   async #ensureThread(userId, settings, cwd) {
