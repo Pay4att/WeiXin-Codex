@@ -229,6 +229,74 @@ export async function sendText({ credentials, to, contextToken, text, runId }) {
   }
 }
 
+async function sendTypingStatus({ credentials, to, typingTicket, status }) {
+  const response = await postJson({
+    baseUrl: credentials.baseUrl || API_BASE_URL,
+    endpoint: "ilink/bot/sendtyping",
+    token: credentials.token,
+    body: {
+      ilink_user_id: to,
+      typing_ticket: typingTicket,
+      status,
+      base_info: baseInfo(),
+    },
+    timeoutMs: 10_000,
+  });
+  if (response.ret && response.ret !== 0) {
+    throw new Error(`微信输入状态发送失败: ${response.ret} ${response.errmsg || ""}`.trim());
+  }
+}
+
+export async function startTyping({
+  credentials,
+  to,
+  contextToken,
+  keepaliveMs = 5_000,
+}) {
+  let timer;
+  let stopped = false;
+  try {
+    const config = await postJson({
+      baseUrl: credentials.baseUrl || API_BASE_URL,
+      endpoint: "ilink/bot/getconfig",
+      token: credentials.token,
+      body: {
+        ilink_user_id: to,
+        context_token: contextToken || undefined,
+        base_info: baseInfo(),
+      },
+      timeoutMs: 10_000,
+    });
+    if ((config.ret && config.ret !== 0) || !config.typing_ticket) {
+      return { supported: false, stop: async () => {} };
+    }
+    const pulse = (status) =>
+      sendTypingStatus({
+        credentials,
+        to,
+        typingTicket: config.typing_ticket,
+        status,
+      });
+    await pulse(1);
+    timer = setInterval(() => {
+      if (!stopped) void pulse(1).catch(() => {});
+    }, keepaliveMs);
+    timer.unref?.();
+    return {
+      supported: true,
+      stop: async () => {
+        if (stopped) return;
+        stopped = true;
+        clearInterval(timer);
+        await pulse(2).catch(() => {});
+      },
+    };
+  } catch {
+    if (timer) clearInterval(timer);
+    return { supported: false, stop: async () => {} };
+  }
+}
+
 function aesEcbPaddedSize(size) {
   return (Math.floor(size / 16) + 1) * 16;
 }

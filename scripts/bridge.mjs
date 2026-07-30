@@ -4,6 +4,7 @@ import fs from "node:fs";
 import process from "node:process";
 
 import { CodexAppServer } from "./lib/codex-client.mjs";
+import { IMAGE_GENERATION_ACK, isImageGenerationRequest } from "./lib/progress.mjs";
 import { downloadInboundImage, hasInboundImage } from "./lib/weixin-media.mjs";
 import {
   extractText,
@@ -11,6 +12,7 @@ import {
   notifyLifecycle,
   sendImage,
   sendText,
+  startTyping,
 } from "./lib/weixin-api.mjs";
 import {
   loadConfig,
@@ -69,6 +71,8 @@ async function commandReply(userId, text) {
       `模型：${settings.model}`,
       `推理：${settings.effort}`,
       `会话：${settings.threadId ? "已建立" : "尚未建立"}`,
+      "反馈：微信输入状态 + 图片生成即时提示",
+      "流式：微信接口不支持同一气泡逐字更新",
       "运行时：Codex app-server（无 OpenClaw）",
     ].join("\n");
   }
@@ -109,24 +113,56 @@ async function processMessage(message, credentials, config, delivery) {
 
   let pending = delivery.pendingReplies[key];
   const contextToken = message.context_token || pending?.contextToken;
-  if (!pending) {
+  if (!pending?.result && !pending?.reply) {
     const text = extractText(message);
+    if (!pending) {
+      pending = {
+        contextToken,
+        to: from,
+        textSent: false,
+        nextImageIndex: 0,
+        progressSent: false,
+      };
+      delivery.pendingReplies[key] = pending;
+      saveDeliveryState(delivery);
+    }
+    const imageGeneration = isImageGenerationRequest(text);
+    if (imageGeneration && !pending.progressSent) {
+      await sendText({
+        credentials,
+        to: from,
+        contextToken,
+        text: IMAGE_GENERATION_ACK,
+        runId: `weixin-codex-${key}-progress`,
+      });
+      pending.progressSent = true;
+      saveDeliveryState(delivery);
+      log(`已发送图片生成提示 key=${key}`);
+    }
+    const typing = await startTyping({ credentials, to: from, contextToken });
     try {
       const image = await downloadInboundImage(message, key);
       if (image) log(`微信图片已解密 key=${key} bytes=${image.bytes}`);
       if (!text && !image) {
         pending = {
+          ...pending,
           result: {
             text: "目前支持文字、图片，以及已带文字转写的语音消息。",
             images: [],
           },
         };
       } else if (text?.startsWith("/") && !image) {
-        pending = { result: { text: await commandReply(from, text), images: [] } };
+        pending = {
+          ...pending,
+          result: { text: await commandReply(from, text), images: [] },
+        };
       } else {
         const prompt = text || "用户发送了这张图片。请简要识别并说明图片内容。";
         try {
-          pending = { result: await codex.chat(from, prompt, image ? [image.path] : []) };
+          pending = {
+            ...pending,
+            result: await codex.chat(from, prompt, image ? [image.path] : []),
+          };
         } finally {
           if (image?.path) {
             try {
@@ -140,8 +176,11 @@ async function processMessage(message, credentials, config, delivery) {
     } catch (error) {
       const label = hasInboundImage(message) ? "图片处理或 Codex 识别失败" : "Codex 暂时无法回复";
       pending = {
+        ...pending,
         result: { text: `${label}：${error.message || String(error)}`, images: [] },
       };
+    } finally {
+      await typing.stop();
     }
     pending.contextToken = contextToken;
     pending.to = from;

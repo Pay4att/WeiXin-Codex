@@ -9,6 +9,10 @@ import test from "node:test";
 
 import { writeMacSandboxProfile } from "../scripts/lib/codex-client.mjs";
 import {
+  IMAGE_GENERATION_ACK,
+  isImageGenerationRequest,
+} from "../scripts/lib/progress.mjs";
+import {
   DEFAULT_EFFORT,
   DEFAULT_MODEL,
   loadConfig,
@@ -17,7 +21,12 @@ import {
   saveConfig,
   ensureStateLayout,
 } from "../scripts/lib/state.mjs";
-import { __test, extractText, sendImage } from "../scripts/lib/weixin-api.mjs";
+import {
+  __test,
+  extractText,
+  sendImage,
+  startTyping,
+} from "../scripts/lib/weixin-api.mjs";
 import { downloadInboundImage } from "../scripts/lib/weixin-media.mjs";
 
 test("default configuration is Luna with max reasoning", () => {
@@ -85,6 +94,59 @@ test("long replies are split at Weixin's 4000-character boundary", () => {
   assert.equal(chunks.length, 2);
   assert.ok(chunks.every((chunk) => chunk.length <= 4000));
   assert.equal(chunks.join("").length, 6000);
+});
+
+test("image generation requests receive an immediate progress acknowledgement", () => {
+  assert.equal(isImageGenerationRequest("生成一张赛博朋克城市图片"), true);
+  assert.equal(isImageGenerationRequest("帮我画个头像"), true);
+  assert.equal(isImageGenerationRequest("create an image of a green robot"), true);
+  assert.equal(isImageGenerationRequest("这张图片是什么"), false);
+  assert.match(IMAGE_GENERATION_ACK, /正在生成图片/);
+});
+
+test("typing indicator gets a ticket, starts, and cancels", async () => {
+  const requests = [];
+  const server = http.createServer(async (request, response) => {
+    const chunks = [];
+    for await (const chunk of request) chunks.push(chunk);
+    requests.push({
+      url: request.url,
+      body: JSON.parse(Buffer.concat(chunks).toString("utf8")),
+    });
+    response.setHeader("content-type", "application/json");
+    response.end(
+      JSON.stringify(
+        request.url === "/ilink/bot/getconfig"
+          ? { ret: 0, typing_ticket: "typing-ticket" }
+          : { ret: 0 },
+      ),
+    );
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const address = server.address();
+    const typing = await startTyping({
+      credentials: {
+        baseUrl: `http://127.0.0.1:${address.port}`,
+        token: "test-token",
+      },
+      to: "owner",
+      contextToken: "context",
+      keepaliveMs: 60_000,
+    });
+    assert.equal(typing.supported, true);
+    await typing.stop();
+    assert.deepEqual(
+      requests.map((entry) => [entry.url, entry.body.status]),
+      [
+        ["/ilink/bot/getconfig", undefined],
+        ["/ilink/bot/sendtyping", 1],
+        ["/ilink/bot/sendtyping", 2],
+      ],
+    );
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
 });
 
 test("encrypted Weixin images are downloaded and decrypted into the chat workspace", async () => {

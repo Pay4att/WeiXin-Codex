@@ -31,6 +31,10 @@ node <plugin-root>/scripts/weixin-codex.mjs <command>
 7. Image understanding and image generation are supported. Users can request
    an image naturally in Weixin; generated output is encrypted, uploaded to
    the Weixin CDN, and sent as an image item.
+8. Normal requests show the native Weixin typing indicator immediately.
+   Image-generation requests also receive an immediate progress message before
+   generation begins. Native same-bubble token streaming is not available in
+   the current public iLink implementation.
 
 The Weixin chat itself supports `/model`, `/think`, `/new`, `/status`, and
 `/help`. Runtime data lives under `~/.weixin-codex/` unless
